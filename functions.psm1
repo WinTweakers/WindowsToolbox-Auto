@@ -163,16 +163,23 @@
         }
     }
     
-    function InstallChoco {
-        $testchoco = powershell choco -v
-        if(-not($testchoco)){
-            Write-Output "Seems Chocolatey is not installed, installing now"
-            Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-            choco feature enable -n allowGlobalConfirmation
+    function InstallWinGet {
+        try {
+            # Check if winget is already installed
+            $er = (invoke-expression "winget -v") 2>&1
+            if ($lastexitcode) { throw $er }
+            Write-Host "winget is already installed."
         }
-        else{
-            choco feature enable -n allowGlobalConfirmation
-            Write-Output "Chocolatey Version $testchoco is already installed"
+        catch {
+            # If winget is not installed. Install it from the Github release
+            Write-Host "winget is not found, installing it right now."
+            
+            $download = "https://github.com/microsoft/winget-cli/releases/download/latest/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+            Write-Host "Dowloading latest release"
+            Invoke-WebRequest -Uri $download -OutFile $PSScriptRoot\winget-latest.appxbundle
+            
+            Write-Host "Installing the package"
+            Add-AppxPackage -Path $PSScriptRoot\winget-latest.appxbundle
         }
     }
     
@@ -952,7 +959,7 @@
         New-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name 'AppsUseLightTheme' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue;
     }
     
-    function RAM {
+    function LowerRAMUsage {
         if((Test-Path -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Control") -ne $true) {  New-Item "HKLM:\SYSTEM\CurrentControlSet\Control" -force -ea SilentlyContinue };
         if((Test-Path -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile") -ne $true) {  New-Item "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -force -ea SilentlyContinue };
         if((Test-Path -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks") -ne $true) {  New-Item "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks" -force -ea SilentlyContinue };
@@ -1068,4 +1075,19 @@
     function DisableAeroShake {
         Write-Output "Disabling Aero Shake..."
         Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "DisallowShaking" -Type DWord -Value 1
+    }
+
+    #Undo functions
+        function EnableTelemetry {
+            Write-Output "(Re)Enabling Telemetry..."
+            Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" -Name "AllowTelemetry" -Type DWord -Value 3
+            Set-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Policies\DataCollection" -Name "AllowTelemetry" -Type DWord -Value 3
+            Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PreviewBuilds" -Name "AllowBuildPreview" -ErrorAction SilentlyContinue
+            Enable-ScheduledTask -TaskName "Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser" | Out-Null
+            Enable-ScheduledTask -TaskName "Microsoft\Windows\Application Experience\ProgramDataUpdater" | Out-Null
+            Enable-ScheduledTask -TaskName "Microsoft\Windows\Autochk\Proxy" | Out-Null
+            Enable-ScheduledTask -TaskName "Microsoft\Windows\Customer Experience Improvement Program\Consolidator" | Out-Null
+            Enable-ScheduledTask -TaskName "Microsoft\Windows\Customer Experience Improvement Program\UsbCeip" | Out-Null
+            Enable-ScheduledTask -TaskName "Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector" | Out-Null
     }
